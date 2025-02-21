@@ -2,173 +2,230 @@ package com.robar.payment.service;
 
 import com.verifone.payment_sdk.*;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.stereotype.Component;
 import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.stereotype.Component;
+
+
+import java.util.HashMap;
 
 @Slf4j
 @Component
 public class PaymentEventListener extends CommerceListener2 {
     private final ApplicationEventPublisher eventPublisher;
+    private PaymentSdk paymentSdk;
 
     public PaymentEventListener(ApplicationEventPublisher eventPublisher) {
         this.eventPublisher = eventPublisher;
+
     }
-    /* 
+
+    public void setPaymentSdk(PaymentSdk paymentSdk) {
+        this.paymentSdk = paymentSdk;
+    }
+
     @Override
     public void handlePaymentCompletedEvent(PaymentCompletedEvent event) {
         if (event.getStatus() == 0) {
             log.info("Payment completed successfully");
-            eventPublisher.publishEvent(new PaymentStatusEvent(
-                event.getPayment().getPaymentId(), 
-                PaymentStatus.COMPLETED, 
+            
+            // Use your model's PaymentStatus enum
+            com.robar.payment.model.PaymentStatus status = com.robar.payment.model.PaymentStatus.COMPLETED;
+            
+            // Create and publish payment status event
+            PaymentStatusEvent statusEvent = new PaymentStatusEvent(
+                event.getPayment().getPaymentId(),
+                status,
                 "Payment successful"
-            ));
+            );
+            eventPublisher.publishEvent(statusEvent);
         } else {
             log.error("Payment failed: {}", event.getMessage());
-            eventPublisher.publishEvent(new PaymentStatusEvent(
+            
+            // Use your model's PaymentStatus enum
+            com.robar.payment.model.PaymentStatus status = com.robar.payment.model.PaymentStatus.FAILED;
+            
+            // Create and publish payment status event
+            PaymentStatusEvent statusEvent = new PaymentStatusEvent(
                 event.getPayment().getPaymentId(),
-                PaymentStatus.FAILED,
+                status,
                 event.getMessage()
-            ));
+            );
+            eventPublisher.publishEvent(statusEvent);
         }
     }
 
     @Override
     public void handleStatus(Status status) {
         log.info("Terminal status update: {}", status.getMessage());
-        if (status.getStatusCode() != 0) {
+        if (status.getStatus() != 0) {
             log.error("Terminal error: {}", status.getMessage());
         }
     }
-    */
-
-    @Override
-    public void handleStatus(Status status) {
-        // Keep your existing implementation
-    }
-
-    // Required empty implementations
-
-    @Override
-    public void handlePaymentCompletedEvent(PaymentCompletedEvent event) {
-    System.out.println("Payment completed: " + event);
-}
-
 
     @Override
     public void handleNotificationEvent(NotificationEvent event) {
         log.debug("Notification event received");
     }
-
+    
     @Override
-    public void handlePrintEvent(PrintEvent event) {
-        log.debug("Print event received");
-    }
-
-    @Override
-    public void handleHostFinalizeTransactionEvent(HostFinalizeTransactionEvent event) {
-        log.debug("Host finalize transaction event received");
+    public void handleCommerceEvent(CommerceEvent event) {
+        log.info("Commerce event: {} - {}", event.getType(), event.getMessage());
     }
 
     @Override
     public void handleTransactionEvent(TransactionEvent event) {
-        log.debug("Transaction event received");
-    }
-
-    @Override
-    public void handleDeviceVitalsInformationEvent(DeviceVitalsInformationEvent event) {
-        log.debug("Device vitals information event received");
-    }
-
-    @Override
-    public void handleScannerStateEvent(ScannerStateEvent event) {
-        log.debug("Scanner state event received");
-    }
-
-    @Override
-    public void handleBasketEvent(BasketEvent event) {
-        log.debug("Basket event received");
+        log.info("Transaction event: {} - {}", event.getType(), event.getMessage());
+        
+        if (event.getType().equals(TransactionEvent.LOGIN_COMPLETED)) {
+            if (event.getStatus() == StatusCode.SUCCESS) {
+                log.info("Login successful");
+            } else {
+                log.error("Login failed");
+            }
+        }
+        
+        if (event.getType().equals(CommerceEvent.SESSION_STARTED)) {
+            if (event.getStatus() == StatusCode.SUCCESS) {
+                log.info("Session started successfully");
+            } else {
+                log.error("Session start failed");
+            }
+        }
+        
+        if (event.getType().equals(CommerceEvent.SESSION_ENDED)) {
+            log.info("Session ended");
+        }
     }
 
     @Override
     public void handleHostAuthorizationEvent(HostAuthorizationEvent event) {
-        log.debug("Host authorization event received");
+        if (event.getStatus() == StatusCode.SUCCESS) {
+            log.info("Host authorization requested");
+            
+            HostTransaction hostTransaction = event.getHostTransaction();
+            if (hostTransaction != null && hostTransaction.getTotalAmount() != null) {
+                try {
+                    // Create EMV data for approval
+                    HashMap<String, String> emvData = new HashMap<>();
+                    emvData.put("8A", "3030"); // Approval code
+                    
+                    String totalAmount = hostTransaction.getTotalAmount();
+                    double amount = Double.parseDouble(totalAmount);
+                    Decimal authAmount = new Decimal(amount);
+                    
+                    // Use the stored paymentSdk reference
+                    if (paymentSdk != null) {
+                        Status result = paymentSdk.getTransactionManager()
+                            .respondToHostAuthorization(
+                                "123456", 
+                                HostDecisionType.HOST_AUTHORIZED, 
+                                emvData, 
+                                authAmount
+                            );
+                        log.info("Host authorization response status: {}", result.getStatus());
+                    } else {
+                        log.error("PaymentSdk reference is null, can't respond to host authorization");
+                    }
+                } catch (Exception e) {
+                    log.error("Error responding to host authorization", e);
+                }
+            }
+        }
     }
-
+    // Basic implementations of other required methods
+    
     @Override
     public void handleAmountAdjustedEvent(AmountAdjustedEvent event) {
-        log.debug("Amount adjusted event received");
-    }
-
-    @Override
-    public void handleStoredValueCardEvent(StoredValueCardEvent event) {
-        log.debug("Stored value card event received");
-    }
-
-    @Override
-    public void handleDeviceManagementEvent(DeviceManagementEvent event) {
-        log.debug("Device management event received");
-    }
-
-    @Override
-    public void handleScannerDataEvent(ScannerDataEvent event) {
-        log.debug("Scanner data event received");
-    }
-
-    @Override
-    public void handleCardInformationReceivedEvent(CardInformationReceivedEvent event) {
-        log.debug("Card information received event");
+        // Basic implementation
     }
 
     @Override
     public void handleBasketAdjustedEvent(BasketAdjustedEvent event) {
-        log.debug("Basket adjusted event received");
+        // Basic implementation
+    }
+
+    @Override
+    public void handleBasketEvent(BasketEvent event) {
+        // Basic implementation
+    }
+
+    @Override
+    public void handleDeviceManagementEvent(DeviceManagementEvent event) {
+        // Basic implementation
     }
 
     @Override
     public void handleLoyaltyReceivedEvent(LoyaltyReceivedEvent event) {
-        log.debug("Loyalty received event received");
+        // Basic implementation
     }
 
     @Override
-    public void handleReconciliationsListEvent(ReconciliationsListEvent event) {
-        log.debug("Reconciliations list event received");
-    }
-
-    @Override
-    public void handleCommerceEvent(CommerceEvent event) {
-        log.debug("Commerce event received");
-    }
-    
-
-    @Override
-    public void handleReconciliationEvent(ReconciliationEvent event) {
-        log.debug("Reconciliation event received");
-    }
-
-    @Override
-    public void handlePinEvent(PinEvent event) {
-        log.debug("Pin event received");
+    public void handleCardInformationReceivedEvent(CardInformationReceivedEvent event) {
+        // Basic implementation
     }
 
     @Override
     public void handleReceiptDeliveryMethodEvent(ReceiptDeliveryMethodEvent event) {
-        log.debug("Receipt delivery method event received");
+        // Basic implementation
     }
 
     @Override
-    public void handleTerminalConfigRequestEvent(ConfigurationRequestEvent event) {
-        log.debug("Terminal config request event received");
-    }
-
-    @Override
-    public void handleTransactionQueryEvent(TransactionQueryEvent event) {
-        log.debug("Transaction query event received");
+    public void handleStoredValueCardEvent(StoredValueCardEvent event) {
+        // Basic implementation
     }
 
     @Override
     public void handleUserInputEvent(UserInputEvent event) {
-        log.debug("User input event received");
+        // Basic implementation
     }
- 
+
+    @Override
+    public void handleReconciliationEvent(ReconciliationEvent event) {
+        // Basic implementation
+    }
+
+    @Override
+    public void handleReconciliationsListEvent(ReconciliationsListEvent event) {
+        // Basic implementation
+    }
+
+    @Override
+    public void handleTransactionQueryEvent(TransactionQueryEvent event) {
+        // Basic implementation
+    }
+
+    @Override
+    public void handleHostFinalizeTransactionEvent(HostFinalizeTransactionEvent event) {
+        // Basic implementation
+    }
+
+    @Override
+    public void handlePinEvent(PinEvent event) {
+        // Basic implementation
+    }
+
+    @Override
+    public void handlePrintEvent(PrintEvent event) {
+        // Basic implementation
+    }
+    
+    @Override
+    public void handleScannerDataEvent(ScannerDataEvent event) {
+        // Basic implementation
+    }
+
+    @Override
+    public void handleScannerStateEvent(ScannerStateEvent event) {
+        // Basic implementation
+    }
+
+    @Override
+    public void handleDeviceVitalsInformationEvent(DeviceVitalsInformationEvent event) {
+        // Basic implementation
+    }
+
+    @Override
+    public void handleTerminalConfigRequestEvent(ConfigurationRequestEvent event) {
+        // Basic implementation
+    }
 }
