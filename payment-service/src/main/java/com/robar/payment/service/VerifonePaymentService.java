@@ -123,7 +123,7 @@ public class VerifonePaymentService implements PaymentService {
             payment.setRequestedAmounts(amountTotals);
             
             // Set currency from the configuration if needed
-            payment.setCurrency("DKK"); // Using DKK as seen in your PaymentRequest model
+            payment.setCurrency("DKK"); // Using DKK 
             
             // Start the payment process
             Status result = paymentSdk.getTransactionManager().startPayment(payment);
